@@ -86,7 +86,7 @@ if "messages" not in st.session_state:
 # --- PATHS & ENV ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
-RASTER_PATH = os.path.join(BASE_DIR, "data", "AHP Reclassified Raster.tif")
+RASTER_PATH = "data/AHP Reclassified Raster.tif"
 
 def load_env_manually(filepath):
     if os.path.exists(filepath):
