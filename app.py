@@ -28,7 +28,7 @@ import io
 import base64
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="💧 Smart Aquifer | Groundwater DSS", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Groundwater DSS", layout="wide", initial_sidebar_state="collapsed")
 
 # --- ROBUST STATE MANAGEMENT (Memory) ---
 if "active_lat" not in st.session_state:
