@@ -253,10 +253,46 @@ def generate_continuous_overlay(df_live, target_col, colormap_name):
 
         return img_url, img_bounds, float(stat_min), float(stat_max)
 
+
 # --- MAIN UI DASHBOARD ---
 def main():
     st.title("💧 Groundwater Decision Support System — Uasin Gishu County")
     
+    # --- DRAG AND DROP SIDEBAR COMPONENT ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📂 Upload Field Data")
+    st.sidebar.write("Drag and drop a CSV file containing new boreholes to temporarily add them to the map.")
+    
+    uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
+    new_boreholes_df = None
+    
+    if uploaded_file is not None:
+        try:
+            new_boreholes_df = pd.read_csv(uploaded_file)
+            new_boreholes_df.columns = new_boreholes_df.columns.str.lower().str.strip()
+            
+            # Check for coordinates
+            has_lat = any(col in new_boreholes_df.columns for col in ['lat', 'latitude', 'y'])
+            has_lon = any(col in new_boreholes_df.columns for col in ['lon', 'longitude', 'lng', 'x'])
+            
+            if has_lat and has_lon:
+                rename_dict = {}
+                for col in new_boreholes_df.columns:
+                    if col in ['lat', 'latitude', 'y']: rename_dict[col] = 'lat'
+                    elif col in ['lon', 'longitude', 'lng', 'x']: rename_dict[col] = 'lon'
+                    elif 'yield' in col: rename_dict[col] = 'yield_m3h'
+                    elif 'swl' in col or 'static' in col: rename_dict[col] = 'swl_m'
+                    elif 'depth' in col or 'dept' in col: rename_dict[col] = 'total_depth_m'
+                
+                new_boreholes_df = new_boreholes_df.rename(columns=rename_dict)
+                st.sidebar.success(f"✅ Successfully loaded {len(new_boreholes_df)} new boreholes!")
+            else:
+                st.sidebar.error("❌ The CSV must contain Latitude and Longitude columns.")
+                new_boreholes_df = None
+                
+        except Exception as e:
+            st.sidebar.error("❌ Error reading the file. Make sure it is a valid CSV.")
+
     df_full = get_live_data()
     df_visible = get_visible_boreholes(df_full)
     
@@ -286,6 +322,7 @@ def main():
 
             m = folium.Map(location=st.session_state.map_center, zoom_start=st.session_state.map_zoom, tiles=active_tiles, attr=active_attr)
 
+            # 1. Plot existing database points
             if not df_visible.empty:
                 for _, row in df_visible.dropna(subset=['lat', 'lon']).iterrows():
                     b_id = row.get('borehole_id', 'Unknown')
@@ -310,6 +347,28 @@ def main():
                         fill=True, 
                         fill_opacity=0.8,
                         popup=folium.Popup(popup_html, max_width=250)
+                    ).add_to(m)
+            
+            # 2. Plot NEW uploaded points as red markers
+            if new_boreholes_df is not None:
+                for _, row in new_boreholes_df.dropna(subset=['lat', 'lon']).iterrows():
+                    y_val = row.get('yield_m3h', 'N/A')
+                    s_val = row.get('swl_m', 'N/A')
+                    d_val = row.get('total_depth_m', 'N/A')
+                    
+                    popup_html = f"""
+                    <div style='min-width: 150px; font-family: sans-serif; color: #1A202C;'>
+                        <b style='color: #d9534f;'>NEW FIELD DATA</b><br>
+                        <b>Yield:</b> {y_val} m³/hr<br>
+                        <b>SWL:</b> {s_val} m<br>
+                        <b>Depth:</b> {d_val} m
+                    </div>
+                    """
+                    
+                    folium.Marker(
+                        location=[row['lat'], row['lon']],
+                        popup=folium.Popup(popup_html, max_width=250),
+                        icon=folium.Icon(color="red", icon="info-sign")
                     ).add_to(m)
                 
             if st.session_state.show_yield:
@@ -489,7 +548,7 @@ def main():
                                 
                                 site_context = f"""[ACTIVE MAP SITE: Coordinates {lat}, {lon}. Town/Location Name: {location_name}. Dashboard calculated: Static Water Level = {e_swl}m, Yield = {e_yield}m3/hr, AHP = {ahp_val}/5. Use this IF asking about a specific site. If asked for nearby stores or centers, prioritize the Town/Location Name provided.]"""
                             else:
-                                site_context = "[NO ACTIVE MAP SITE.]"
+                                site_context = "[NO NO ACTIVE MAP SITE.]"
 
                             db_context = "[NO REGISTRY DATA AVAILABLE.]"
                             if not df_full.empty:
