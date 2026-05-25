@@ -1,0 +1,13 @@
+# Secret configuration
+.streamlit/
+
+# Python cache files (keep your project clean)
+__pycache__/
+*.pyc
+.env
+
+# Optional: if you have local database or data dumps you don't want on Github
+data/*.tmps
+
+.env
+.streamlit/secrets.toml.txt

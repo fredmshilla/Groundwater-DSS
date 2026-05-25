@@ -1,0 +1,13 @@
+streamlit
+streamlit-folium
+folium
+rasterio
+pandas
+numpy
+scipy
+psycopg2-binary
+groq
+geopy
+streamlit-geolocation
+matplotlib
+branca
