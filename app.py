@@ -479,7 +479,7 @@ def main():
 
         # --- BOTTOM SECTION: HYDROBOT UI ---
         st.divider()
-        st.subheader("💬 HydroBot: AI Data & Site Analyst")
+        st.subheader("HydroBot")
         
         current_api_key = os.environ.get("GROQ_API_KEY", "")
         if not current_api_key:
