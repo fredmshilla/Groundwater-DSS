@@ -296,7 +296,7 @@ def main():
     df_full = get_live_data()
     df_visible = get_visible_boreholes(df_full)
     
-    tab1, tab2 = st.tabs(["🗺️ DSS Map & Virtual Borehole", "📊 Live Borehole Registry"])
+    tab1, tab2 = st.tabs(["DSS Map & Virtual Borehole", "Live Borehole Registry"])
 
     with tab1:
         col_map, col_analysis = st.columns([3.5, 1.5])
@@ -306,9 +306,9 @@ def main():
             with c1:
                 st.selectbox("Basemap", ["Google Maps", "Google Satellite", "OpenStreetMap"], key="basemap", label_visibility="collapsed")
             with c2:
-                st.toggle("🌊 Show Yield Surface", key="show_yield")
+                st.toggle("Show Yield Surface", key="show_yield")
             with c3:
-                st.toggle("💧 Show SWL Surface", key="show_swl")
+                st.toggle("Show SWL Surface", key="show_swl")
 
             if st.session_state.basemap == "Google Satellite":
                 active_tiles = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
@@ -462,7 +462,7 @@ def main():
                     norm_yield = min(e_yield, 5.0) 
                     gwp_score = round((ahp_val * W1) + (norm_yield * W2), 2)
                     
-                    st.caption(f"📍 Coordinates: {round(lat,5)}, {round(lon,5)}")
+                    st.caption(f" Coordinates: {round(lat,5)}, {round(lon,5)}")
                     
                     st.metric("Expected SWL", f"{e_swl} m")
                     st.metric("Expected Yield", f"{e_yield} m³/hr")
@@ -471,9 +471,9 @@ def main():
                     st.divider()
                     st.subheader(f"Overall GWP Index: {gwp_score} / 5")
                     
-                    if gwp_score > 3.5: st.success("🟢 Highly Favorable for Drilling")
-                    elif gwp_score > 2.0: st.warning("🟡 Moderate Risk Level")
-                    else: st.error("🔴 High Dry-Hole Risk")
+                    if gwp_score > 3.5: st.success(" Highly Favorable for Drilling")
+                    elif gwp_score > 2.0: st.warning(" Moderate Risk Level")
+                    else: st.error(" High Dry-Hole Risk")
             else:
                 st.info("Awaiting location input. Click the map or use GPS to generate data.")
 
