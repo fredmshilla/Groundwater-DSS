@@ -256,7 +256,7 @@ def generate_continuous_overlay(df_live, target_col, colormap_name):
 
 # --- MAIN UI DASHBOARD ---
 def main():
-    st.title("💧 Groundwater Decision Support System — Uasin Gishu County")
+    st.title(" Groundwater Decision Support System — Uasin Gishu County")
     
     # --- DRAG AND DROP SIDEBAR COMPONENT ---
     st.sidebar.markdown("---")
@@ -456,7 +456,7 @@ def main():
                 ahp_val = round(get_ahp_suitability(lat, lon), 2)
                 
                 if ahp_val == 0:
-                    st.error("⚠️ Target is outside the Uasin Gishu boundary. No data available.")
+                    st.error(" Target is outside the Uasin Gishu boundary. No data available.")
                 else:
                     e_yield, e_swl = run_idw_prediction(lat, lon, df_full)
                     norm_yield = min(e_yield, 5.0) 
