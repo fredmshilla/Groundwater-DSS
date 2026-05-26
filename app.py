@@ -521,7 +521,7 @@ def main():
                         with st.chat_message(message["role"]):
                             st.markdown(message["content"])
                 
-                prompt = st.chat_input("Ask about the map site, or ask 'Are there missing values in our registry?'")
+                prompt = st.chat_input("Chat'")
                 
                 if prompt:
                     st.session_state.messages.append({"role": "user", "content": prompt})
