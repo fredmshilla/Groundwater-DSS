@@ -256,7 +256,7 @@ def generate_continuous_overlay(df_live, target_col, colormap_name):
 
 # --- MAIN UI DASHBOARD ---
 def main():
-    st.title(" Groundwater Decision Support System — Uasin Gishu County")
+    st.title("💧 Groundwater Decision Support System — Uasin Gishu County")
     
     # --- DRAG AND DROP SIDEBAR COMPONENT ---
     st.sidebar.markdown("---")
@@ -296,7 +296,7 @@ def main():
     df_full = get_live_data()
     df_visible = get_visible_boreholes(df_full)
     
-    tab1, tab2 = st.tabs(["DSS Map & Virtual Borehole", "Live Borehole Registry"])
+    tab1, tab2 = st.tabs(["🗺️ DSS Map & Virtual Borehole", "📊 Live Borehole Registry"])
 
     with tab1:
         col_map, col_analysis = st.columns([3.5, 1.5])
@@ -306,9 +306,9 @@ def main():
             with c1:
                 st.selectbox("Basemap", ["Google Maps", "Google Satellite", "OpenStreetMap"], key="basemap", label_visibility="collapsed")
             with c2:
-                st.toggle("Show Yield Surface", key="show_yield")
+                st.toggle("🌊 Show Yield Surface", key="show_yield")
             with c3:
-                st.toggle("Show SWL Surface", key="show_swl")
+                st.toggle("💧 Show SWL Surface", key="show_swl")
 
             if st.session_state.basemap == "Google Satellite":
                 active_tiles = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
@@ -434,7 +434,8 @@ def main():
                     popup="Active Target"
                 ).add_to(m)
 
-            map_response = st_folium(m, height=650, use_container_width=True, returned_objects=["last_clicked"])
+            # --- THE NEW FIX IS HERE: Asking for zoom and center data back from the map ---
+            map_response = st_folium(m, height=650, use_container_width=True, returned_objects=["last_clicked", "zoom", "center"])
 
             if map_response:
                 current_click = map_response.get('last_clicked')
@@ -442,6 +443,14 @@ def main():
                     st.session_state.last_processed_click = current_click
                     st.session_state.active_lat = current_click['lat']
                     st.session_state.active_lon = current_click['lng']
+                    
+                    # --- THE NEW FIX IS HERE: Saving the zoom and center before reloading ---
+                    if map_response.get("zoom"):
+                        st.session_state.map_zoom = map_response.get("zoom")
+                    if map_response.get("center"):
+                        st.session_state.map_center = [map_response["center"]["lat"], map_response["center"]["lng"]]
+                    # ------------------------------------------------------------------------
+                    
                     st.rerun()
 
         with col_analysis:
@@ -456,13 +465,13 @@ def main():
                 ahp_val = round(get_ahp_suitability(lat, lon), 2)
                 
                 if ahp_val == 0:
-                    st.error(" Target is outside the Uasin Gishu boundary. No data available.")
+                    st.error("⚠️ Target is outside the Uasin Gishu boundary. No data available.")
                 else:
                     e_yield, e_swl = run_idw_prediction(lat, lon, df_full)
                     norm_yield = min(e_yield, 5.0) 
                     gwp_score = round((ahp_val * W1) + (norm_yield * W2), 2)
                     
-                    st.caption(f" Coordinates: {round(lat,5)}, {round(lon,5)}")
+                    st.caption(f"📍 Coordinates: {round(lat,5)}, {round(lon,5)}")
                     
                     st.metric("Expected SWL", f"{e_swl} m")
                     st.metric("Expected Yield", f"{e_yield} m³/hr")
@@ -471,15 +480,15 @@ def main():
                     st.divider()
                     st.subheader(f"Overall GWP Index: {gwp_score} / 5")
                     
-                    if gwp_score > 3.5: st.success(" Highly Favorable for Drilling")
-                    elif gwp_score > 2.0: st.warning(" Moderate Risk Level")
-                    else: st.error(" High Dry-Hole Risk")
+                    if gwp_score > 3.5: st.success("🟢 Highly Favorable for Drilling")
+                    elif gwp_score > 2.0: st.warning("🟡 Moderate Risk Level")
+                    else: st.error("🔴 High Dry-Hole Risk")
             else:
                 st.info("Awaiting location input. Click the map or use GPS to generate data.")
 
         # --- BOTTOM SECTION: HYDROBOT UI ---
         st.divider()
-        st.subheader("HydroBot")
+        st.subheader("💬 HydroBot: AI Data & Site Analyst")
         
         current_api_key = os.environ.get("GROQ_API_KEY", "")
         if not current_api_key:
@@ -521,7 +530,7 @@ def main():
                         with st.chat_message(message["role"]):
                             st.markdown(message["content"])
                 
-                prompt = st.chat_input("Chat'")
+                prompt = st.chat_input("Ask about the map site, or ask 'Are there missing values in our registry?'")
                 
                 if prompt:
                     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -548,7 +557,7 @@ def main():
                                 
                                 site_context = f"""[ACTIVE MAP SITE: Coordinates {lat}, {lon}. Town/Location Name: {location_name}. Dashboard calculated: Static Water Level = {e_swl}m, Yield = {e_yield}m3/hr, AHP = {ahp_val}/5. Use this IF asking about a specific site. If asked for nearby stores or centers, prioritize the Town/Location Name provided.]"""
                             else:
-                                site_context = "[NO NO ACTIVE MAP SITE.]"
+                                site_context = "[NO ACTIVE MAP SITE.]"
 
                             db_context = "[NO REGISTRY DATA AVAILABLE.]"
                             if not df_full.empty:
