@@ -243,4 +243,374 @@ def generate_continuous_overlay(df_live, target_col, colormap_name):
         img_url = f"data:image/png;base64,{img_data}"
         
         try:
-            wgs_bounds = transform_bounds(src.crs, CRS.from_epsg(4326), src.bounds.left, src.bounds.bottom, src.bounds.right, src.bounds.top
+            wgs_bounds = transform_bounds(src.crs, CRS.from_epsg(4326), src.bounds.left, src.bounds.bottom, src.bounds.right, src.bounds.top)
+            img_bounds = [[wgs_bounds[1], wgs_bounds[0]], [wgs_bounds[3], wgs_bounds[2]]]
+        except Exception:
+            img_bounds = [[src.bounds.bottom, src.bounds.left], [src.bounds.top, src.bounds.right]]
+
+        return img_url, img_bounds, float(stat_min), float(stat_max)
+
+# --- MAIN UI DASHBOARD ---
+def main():
+    st.title("💧 Groundwater Decision Support System — Uasin Gishu County")
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📂 Upload Field Data")
+    st.sidebar.write("Drag and drop a CSV file containing new boreholes to temporarily add them to the map.")
+    
+    uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
+    new_boreholes_df = None
+    
+    if uploaded_file is not None:
+        try:
+            new_boreholes_df = pd.read_csv(uploaded_file)
+            new_boreholes_df.columns = new_boreholes_df.columns.str.lower().str.strip()
+            
+            has_lat = any(col in new_boreholes_df.columns for col in ['lat', 'latitude', 'y'])
+            has_lon = any(col in new_boreholes_df.columns for col in ['lon', 'longitude', 'lng', 'x'])
+            
+            if has_lat and has_lon:
+                rename_dict = {}
+                for col in new_boreholes_df.columns:
+                    if col in ['lat', 'latitude', 'y']: rename_dict[col] = 'lat'
+                    elif col in ['lon', 'longitude', 'lng', 'x']: rename_dict[col] = 'lon'
+                    elif 'yield' in col: rename_dict[col] = 'yield_m3h'
+                    elif 'swl' in col or 'static' in col: rename_dict[col] = 'swl_m'
+                    elif 'depth' in col or 'dept' in col: rename_dict[col] = 'total_depth_m'
+                
+                new_boreholes_df = new_boreholes_df.rename(columns=rename_dict)
+                st.sidebar.success(f"✅ Successfully loaded {len(new_boreholes_df)} new boreholes!")
+            else:
+                st.sidebar.error("❌ The CSV must contain Latitude and Longitude columns.")
+                new_boreholes_df = None
+                
+        except Exception as e:
+            st.sidebar.error("❌ Error reading the file. Make sure it is a valid CSV.")
+
+    df_full = get_live_data()
+    df_visible = get_visible_boreholes(df_full)
+    
+    tab1, tab2 = st.tabs(["🗺️ DSS Map & Virtual Borehole", "📊 Live Borehole Registry"])
+
+    with tab1:
+        col_map, col_analysis = st.columns([3.5, 1.5])
+        
+        with col_map:
+            c1, c2, c3 = st.columns([1.5, 1, 1])
+            with c1:
+                st.selectbox("Basemap", ["Google Maps", "Google Satellite", "OpenStreetMap"], key="basemap", label_visibility="collapsed")
+            with c2:
+                st.toggle("🌊 Show Yield Surface", key="show_yield")
+            with c3:
+                st.toggle("💧 Show SWL Surface", key="show_swl")
+
+            if st.session_state.basemap == "Google Satellite":
+                active_tiles = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
+                active_attr = 'Google'
+            elif st.session_state.basemap == "OpenStreetMap":
+                active_tiles = 'OpenStreetMap'
+                active_attr = 'OpenStreetMap'
+            else:
+                active_tiles = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
+                active_attr = 'Google'
+
+            m = folium.Map(location=st.session_state.map_center, zoom_start=st.session_state.map_zoom, tiles=active_tiles, attr=active_attr)
+
+            if not df_visible.empty:
+                for _, row in df_visible.dropna(subset=['lat', 'lon']).iterrows():
+                    b_id = row.get('borehole_id', 'Unknown')
+                    y_val = row.get('yield_m3h', 'N/A')
+                    s_val = row.get('swl_m', 'N/A')
+                    d_val = row.get('total_depth_m', 'N/A')
+                    
+                    popup_html = f"""
+                    <div style='min-width: 150px; font-family: sans-serif; color: #1A202C;'>
+                        <b>ID:</b> {b_id}<br>
+                        <b>Yield:</b> {y_val} m³/hr<br>
+                        <b>SWL:</b> {s_val} m<br>
+                        <b>Depth:</b> {d_val} m
+                    </div>
+                    """
+                    
+                    folium.CircleMarker(
+                        location=[row['lat'], row['lon']], 
+                        radius=4, 
+                        color='#003B73', 
+                        fill_color='#00A8E8', 
+                        fill=True, 
+                        fill_opacity=0.8,
+                        popup=folium.Popup(popup_html, max_width=250)
+                    ).add_to(m)
+            
+            if new_boreholes_df is not None:
+                for _, row in new_boreholes_df.dropna(subset=['lat', 'lon']).iterrows():
+                    y_val = row.get('yield_m3h', 'N/A')
+                    s_val = row.get('swl_m', 'N/A')
+                    d_val = row.get('total_depth_m', 'N/A')
+                    
+                    popup_html = f"""
+                    <div style='min-width: 150px; font-family: sans-serif; color: #1A202C;'>
+                        <b style='color: #d9534f;'>NEW FIELD DATA</b><br>
+                        <b>Yield:</b> {y_val} m³/hr<br>
+                        <b>SWL:</b> {s_val} m<br>
+                        <b>Depth:</b> {d_val} m
+                    </div>
+                    """
+                    
+                    folium.Marker(
+                        location=[row['lat'], row['lon']],
+                        popup=folium.Popup(popup_html, max_width=250),
+                        icon=folium.Icon(color="red", icon="info-sign")
+                    ).add_to(m)
+                
+            if st.session_state.show_yield:
+                if 'yield_m3h' not in df_full.columns:
+                    st.error(f"⚠️ App cannot find Yield data. Available columns are: {list(df_full.columns)}")
+                else:
+                    y_img, y_bounds, y_min, y_max = generate_continuous_overlay(df_full, 'yield_m3h', 'Spectral')
+                    if y_img:
+                        folium.raster_layers.ImageOverlay(image=y_img, bounds=y_bounds, opacity=0.75).add_to(m)
+                        
+                        macro_y = MacroElement()
+                        macro_y._template = Template(f"""
+                        {{% macro html(this, kwargs) %}}
+                        <div style="position: absolute; z-index: 9999; bottom: 30px; right: 30px; background-color: rgba(255, 255, 255, 0.95); padding: 12px; border-radius: 8px; border: 1px solid #ccc; color: #1A202C; font-size: 11px; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                            <div style="font-weight: bold; margin-bottom: 6px; font-size: 12px;">Yield<br><span style="font-weight: normal; font-size: 10px;">(m³/hr)</span></div>
+                            <div style="display: flex; align-items: stretch;">
+                                <div style="background: linear-gradient(to top, #d53e4f, #fdae61, #e6f598, #66c2a5, #3288bd); width: 14px; height: 120px; border: 1px solid #999; margin-right: 8px; border-radius: 2px;"></div>
+                                <div style="display: flex; flex-direction: column; justify-content: space-between; height: 120px; padding: 1px 0;">
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{y_max:.1f}+ <span style="color:#555;">(High)</span></div>
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{(y_min+0.75*(y_max-y_min)):.1f}</div>
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{(y_max+y_min)/2:.1f} <span style="color:#555;">(Med)</span></div>
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{(y_min+0.25*(y_max-y_min)):.1f}</div>
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{y_min:.1f} <span style="color:#555;">(Low)</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        {{% endmacro %}}
+                        """)
+                        m.get_root().add_child(macro_y)
+
+            if st.session_state.show_swl:
+                if 'swl_m' not in df_full.columns:
+                    st.error(f"⚠️ App cannot find SWL data. Available columns are: {list(df_full.columns)}")
+                else:
+                    s_img, s_bounds, s_min, s_max = generate_continuous_overlay(df_full, 'swl_m', 'jet')
+                    if s_img:
+                        folium.raster_layers.ImageOverlay(image=s_img, bounds=s_bounds, opacity=0.75).add_to(m)
+                        
+                        macro_s = MacroElement()
+                        macro_s._template = Template(f"""
+                        {{% macro html(this, kwargs) %}}
+                        <div style="position: absolute; z-index: 9999; bottom: 30px; right: 160px; background-color: rgba(255, 255, 255, 0.95); padding: 12px; border-radius: 8px; border: 1px solid #ccc; color: #1A202C; font-size: 11px; font-family: sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                            <div style="font-weight: bold; margin-bottom: 6px; font-size: 12px;">SWL<br><span style="font-weight: normal; font-size: 10px;">(meters)</span></div>
+                            <div style="display: flex; align-items: stretch;">
+                                <div style="background: linear-gradient(to top, #000080, #00ffff, #ffff00, #ff0000); width: 14px; height: 120px; border: 1px solid #999; margin-right: 8px; border-radius: 2px;"></div>
+                                <div style="display: flex; flex-direction: column; justify-content: space-between; height: 120px; padding: 1px 0;">
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{s_max:.1f}+ <span style="color:#555;">(Deep)</span></div>
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{(s_min+0.75*(s_max-s_min)):.1f}</div>
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{(s_max+s_min)/2:.1f}</div>
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{(s_min+0.25*(s_max-s_min)):.1f}</div>
+                                    <div style="margin: 0; padding: 0; line-height: 1;">{s_min:.1f} <span style="color:#555;">(Shallow)</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        {{% endmacro %}}
+                        """)
+                        m.get_root().add_child(macro_s)
+
+            if st.session_state.active_lat:
+                folium.Marker(
+                    [st.session_state.active_lat, st.session_state.active_lon],
+                    icon=folium.Icon(color='red', icon='info-sign'),
+                    popup="Active Target"
+                ).add_to(m)
+
+            map_response = st_folium(m, height=650, use_container_width=True, returned_objects=["last_clicked", "zoom", "center"])
+
+            if map_response:
+                current_click = map_response.get('last_clicked')
+                if current_click and current_click != st.session_state.last_processed_click:
+                    st.session_state.last_processed_click = current_click
+                    st.session_state.active_lat = current_click['lat']
+                    st.session_state.active_lon = current_click['lng']
+                    
+                    if map_response.get("zoom"):
+                        st.session_state.map_zoom = map_response.get("zoom")
+                    if map_response.get("center"):
+                        st.session_state.map_center = [map_response["center"]["lat"], map_response["center"]["lng"]]
+                    
+                    st.rerun()
+
+        with col_analysis:
+            st.subheader("Virtual Site Analysis")
+            st.write("Real-time interpolation of groundwater parameters.")
+            st.divider()
+
+            if st.session_state.active_lat:
+                lat = st.session_state.active_lat
+                lon = st.session_state.active_lon
+                
+                ahp_val = round(get_ahp_suitability(lat, lon), 2)
+                
+                if ahp_val == 0:
+                    st.error("⚠️ Target is outside the Uasin Gishu boundary. No data available.")
+                else:
+                    e_yield, e_swl = run_idw_prediction(lat, lon, df_full)
+                    norm_yield = min(e_yield, 5.0) 
+                    gwp_score = round((ahp_val * W1) + (norm_yield * W2), 2)
+                    
+                    st.caption(f"📍 Coordinates: {round(lat,5)}, {round(lon,5)}")
+                    
+                    st.metric("Expected SWL", f"{e_swl} m")
+                    st.metric("Expected Yield", f"{e_yield} m³/hr")
+                    st.metric("GIS Suitability (AHP)", f"{ahp_val} / 5")
+                    
+                    st.divider()
+                    st.subheader(f"Overall GWP Index: {gwp_score} / 5")
+                    
+                    if gwp_score > 3.5: st.success("🟢 Highly Favorable for Drilling")
+                    elif gwp_score > 2.0: st.warning("🟡 Moderate Risk Level")
+                    else: st.error("🔴 High Dry-Hole Risk")
+            else:
+                st.info("Awaiting location input. Click the map or use GPS to generate data.")
+
+        # --- BOTTOM SECTION: HYDROBOT UI ---
+        st.divider()
+        st.subheader("💬 HydroBot: AI Data & Site Analyst")
+        
+        current_api_key = os.environ.get("GROQ_API_KEY", "")
+        if not current_api_key:
+            st.warning("⚠️ Please paste your free Groq API Key to enable the AI Consultant.")
+            user_key = st.text_input("🔑 Groq API Key:", type="password")
+            if user_key:
+                os.environ["GROQ_API_KEY"] = user_key
+                st.rerun()
+                
+        if current_api_key:
+            client = Groq(api_key=current_api_key)
+            col_gps, col_chat = st.columns([1, 4])
+            
+            with col_gps:
+                st.write("**Access My Location:**")
+                loc = streamlit_geolocation()
+                
+                if loc and loc.get('latitude'):
+                    gps_coords = {'lat': loc['latitude'], 'lng': loc['longitude']}
+                    
+                    if gps_coords != st.session_state.last_processed_gps:
+                        st.session_state.last_processed_gps = gps_coords
+                        st.session_state.active_lat = gps_coords['lat']
+                        st.session_state.active_lon = gps_coords['lng']
+                        st.session_state.map_center = [gps_coords['lat'], gps_coords['lng']]
+                        st.session_state.map_zoom = 16 
+                        
+                        st.session_state.last_processed_click = None 
+                        
+                        st.session_state.messages.append({"role": "user", "content": "📍 *User generated data via GPS*"})
+                        st.session_state.messages.append({"role": "assistant", "content": "I have successfully calculated the parameters for your GPS location. Review the Virtual Site Analysis panel. How can I help you analyze these results?"})
+                        st.rerun()
+
+            with col_chat:
+                chat_container = st.container(height=400)
+                
+                with chat_container:
+                    for message in st.session_state.messages:
+                        with st.chat_message(message["role"]):
+                            st.markdown(message["content"])
+                
+                prompt = st.chat_input("Ask about the map site, or ask 'Are there missing values in our registry?'")
+                
+                if prompt:
+                    st.session_state.messages.append({"role": "user", "content": prompt})
+                    with chat_container:
+                        with st.chat_message("user"):
+                            st.markdown(prompt)
+
+                    with st.spinner("Analyzing data and generating insights..."):
+                        try:
+                            location_name = "an unspecified location"
+                            if st.session_state.active_lat:
+                                try:
+                                    geolocator = ArcGIS(user_agent="uoe_groundwater_dss")
+                                    location_data = geolocator.reverse(f"{st.session_state.active_lat}, {st.session_state.active_lon}")
+                                    if location_data:
+                                        location_name = location_data.address.split(',')[0]
+                                except Exception as geo_error:
+                                    print(f"Geocoding failed: {geo_error}") 
+                            
+                            if st.session_state.active_lat:
+                                lat, lon = st.session_state.active_lat, st.session_state.active_lon
+                                ahp_val = round(get_ahp_suitability(lat, lon), 2)
+                                e_yield, e_swl = run_idw_prediction(lat, lon, df_full)
+                                
+                                site_context = f"""[ACTIVE MAP SITE: Coordinates {lat}, {lon}. Town/Location Name: {location_name}. Dashboard calculated: Static Water Level = {e_swl}m, Yield = {e_yield}m3/hr, AHP = {ahp_val}/5. Use this IF asking about a specific site. If asked for nearby stores or centers, prioritize the Town/Location Name provided.]"""
+                            else:
+                                site_context = "[NO ACTIVE MAP SITE.]"
+
+                            db_context = "[NO REGISTRY DATA AVAILABLE.]"
+                            if not df_full.empty:
+                                total_rows = len(df_full)
+                                cols = ", ".join(df_full.columns)
+                                missing_vals = df_full.isnull().sum().to_dict()
+                                
+                                avg_yield = df_full['yield_m3h'].mean() if 'yield_m3h' in df_full.columns else 0
+                                avg_swl = df_full['swl_m'].mean() if 'swl_m' in df_full.columns else 0
+                                
+                                db_context = f"""[GLOBAL BOREHOLE REGISTRY STATS: Total Boreholes: {total_rows}. Columns available: {cols}. County Averages -> Yield: {avg_yield:.2f} m3/hr | SWL: {avg_swl:.2f} m. Missing Data Count by Column: {missing_vals}. Use this data IF the user asks you to analyze the registry, clean data, or find statistical trends.]"""
+
+                            system_instruction = """
+You are HydroBot, an elite Senior Hydrogeologist, Civil Engineer, and Advanced Data Analyst. 
+You act as the primary AI Consultant for a Decision Support System mapping Groundwater Potential in Uasin Gishu County, Kenya.
+
+[CORE IDENTITY & TONE]
+1. You are brilliant, highly analytical, and deeply knowledgeable about groundwater hydrology, GIS spatial analysis, and drilling engineering.
+2. Your tone is academic, professional, and helpful—like a highly respected engineering professor. 
+3. You do not just give answers; you explain the *engineering reasoning* behind them step-by-step.
+
+[LOCAL CONTEXT: UASIN GISHU COUNTY]
+- You know that Uasin Gishu primarily features volcanic rocks (phonolites, basalts, tuffs). 
+- Groundwater here is typically structurally controlled (found in faults, fractures, and weathered contacts).
+- The general altitude is high (around 2000m+), affecting recharge rates and pumping head requirements.
+
+[BEHAVIORAL RULES]
+- GENERAL AI CAPABILITY: If the user asks a general question (e.g., "Write an email," "Explain quantum physics," "Help me format a document"), act as a helpful, world-class AI assistant and answer them brilliantly. You are not limited to *only* talking about water.
+- HYDROGEOLOGY QUERIES: If the user asks about water, drilling, pumps, or maps, switch into "Senior Engineer" mode. Use technical terms correctly (Transmissivity, Storativity, Drawdown, Yield, SWL) but explain them simply if asked.
+- DATA ANALYSIS: When given BOREHOLE REGISTRY STATS, act like a data scientist. Point out anomalies, suggest reasons for missing data, and provide statistical insights.
+- SITE ANALYSIS: When given ACTIVE MAP SITE data, act like a consultant advising a client. Tell them if the site is financially viable for drilling based on the Expected Yield. Provide pump sizing estimates if requested.
+- GOOGLE MAPS LINKS: If you suggest a supplier or physical location, provide a link exactly like this: [Store Name](https://www.google.com/maps/search/?api=1&query=Store+Name+City+Kenya). Replace spaces with (+).
+
+NEVER output raw Python code unless explicitly asked by the user. Do not break character.
+"""
+
+                            api_messages = [{"role": "system", "content": f"{system_instruction}\n\n{site_context}\n{db_context}"}]
+                            
+                            for m in st.session_state.messages[-4:]:
+                                api_messages.append({"role": m["role"], "content": m["content"]})
+
+                            chat_completion = client.chat.completions.create(
+                                messages=api_messages,
+                                model="gpt-oss-120b", 
+                            )
+                            
+                            bot_reply = chat_completion.choices[0].message.content
+                            
+                            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"AI Processing Error: {e}")
+
+    with tab2:
+        st.subheader("Live Borehole Registry")
+        
+        core_columns = ['borehole_id', 'lat', 'lon', 'yield_m3h', 'swl_m', 'total_depth_m']
+        display_cols = [col for col in core_columns if col in df_full.columns]
+        
+        if display_cols:
+            st.dataframe(df_full[display_cols], use_container_width=True)
+        else:
+            st.info("The required core columns could not be found in the uploaded data.")
+
+if __name__ == '__main__':
+    main()
