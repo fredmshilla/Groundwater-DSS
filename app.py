@@ -590,7 +590,7 @@ NEVER output raw Python code unless explicitly asked by the user. Do not break c
 
                             chat_completion = client.chat.completions.create(
                                 messages=api_messages,
-                                model="gpt-oss-120b", 
+                                model="qwen/qwen3.8-27b", 
                             )
                             
                             bot_reply = chat_completion.choices[0].message.content
