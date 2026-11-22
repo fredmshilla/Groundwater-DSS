@@ -252,7 +252,7 @@ def generate_continuous_overlay(df_live, target_col, colormap_name):
 
 # --- MAIN UI DASHBOARD ---
 def main():
-    st.title("💧 Groundwater Decision Support System — Uasin Gishu County")
+    st.title(" Groundwater Decision Support System — Uasin Gishu County")
     
     st.sidebar.markdown("---")
     st.sidebar.subheader("📂 Upload Field Data")
@@ -290,7 +290,7 @@ def main():
     df_full = get_live_data()
     df_visible = get_visible_boreholes(df_full)
     
-    tab1, tab2 = st.tabs(["🗺️ DSS Map & Virtual Borehole", "📊 Live Borehole Registry"])
+    tab1, tab2 = st.tabs([" DSS Map & Virtual Borehole", " Live Borehole Registry"])
 
     with tab1:
         col_map, col_analysis = st.columns([3.5, 1.5])
@@ -300,9 +300,9 @@ def main():
             with c1:
                 st.selectbox("Basemap", ["Google Maps", "Google Satellite", "OpenStreetMap"], key="basemap", label_visibility="collapsed")
             with c2:
-                st.toggle("🌊 Show Yield Surface", key="show_yield")
+                st.toggle(" Show Yield Surface", key="show_yield")
             with c3:
-                st.toggle("💧 Show SWL Surface", key="show_swl")
+                st.toggle(" Show SWL Surface", key="show_swl")
 
             if st.session_state.basemap == "Google Satellite":
                 active_tiles = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
